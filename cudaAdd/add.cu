@@ -24,24 +24,39 @@ __global__ void addKernel(int* c, int* a, int* b)
     }
 }
 
+__global__ void add_fp32(float* c, float* a, float* b)
+{
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    while (tid < N) {
+        c[tid] = a[tid] + b[tid];
+        tid += blockDim.x * gridDim.x;
+    }
+}
+
 extern "C" void addWithCUDA(int* c, int* a, int* b) {
     addKernel<<<128, 128 >>>(c, a, b);
 }
 
+extern "C" void add_fp32_CUDA(float* c, float* a, float* b) {
+    add_fp32<<<128, 128 >>>(c, a, b);
+}
+
 int main()
 {
-    int a[N];
-    int b[N];
-    int c[N];
-    int* dev_a, * dev_b, * dev_c;
+    float a[N];
+    float b[N];
+    float c[N];
+    float* dev_a, * dev_b, * dev_c;
+    bool success = true;
 
-    CUDA_ERROR_WRAP(cudaMalloc(&dev_a, N * sizeof(int)));
-    CUDA_ERROR_WRAP(cudaMalloc(&dev_b, N * sizeof(int)));
-    CUDA_ERROR_WRAP(cudaMalloc(&dev_c, N * sizeof(int)));
+    CUDA_ERROR_WRAP(cudaMalloc(&dev_a, N * sizeof(float)));
+    CUDA_ERROR_WRAP(cudaMalloc(&dev_b, N * sizeof(float)));
+    CUDA_ERROR_WRAP(cudaMalloc(&dev_c, N * sizeof(float)));
 
+    srand(time(0));
     for (int i = 0; i < N; i++) {
-        a[i] = i+2;
-        b[i] = i * 11;
+        a[i] = rand() * (4.0 / RAND_MAX) - 2.0;
+        b[i] = rand() * (4.0 / RAND_MAX) - 2.0;
     }
 
     CUDA_ERROR_WRAP(cudaSetDevice(0));
@@ -49,7 +64,7 @@ int main()
     CUDA_ERROR_WRAP(cudaMemcpy(dev_a, a, N * sizeof(int), cudaMemcpyHostToDevice));
     CUDA_ERROR_WRAP(cudaMemcpy(dev_b, b, N * sizeof(int), cudaMemcpyHostToDevice));
 
-    addWithCUDA(dev_c, dev_a, dev_b);
+    add_fp32_CUDA(dev_c, dev_a, dev_b);
 
     cudaError_t cudaStatus = cudaGetLastError();
     if (cudaStatus != cudaSuccess) {
@@ -61,10 +76,9 @@ int main()
 
     CUDA_ERROR_WRAP(cudaMemcpy(c, dev_c, N * sizeof(int), cudaMemcpyDeviceToHost));
 
-    bool success = true;
     for (int i = 0; i < N; i++) {
         if (a[i] + b[i] != c[i]) {
-            printf("Error: %d + %d != %d at index %d\n", a[i], b[i], c[i], i);
+            printf("Error: %f + %f != %f at index %d\n", a[i], b[i], c[i], i);
             success = false;
         }
     }

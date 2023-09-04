@@ -21,7 +21,7 @@ inline T min(T a, T b) {
 }
 
 
-const int N = 33 * 1024;
+const int N = 33*1024;
 const int threadsPerBlock = 256;
 const int blocksPerGrid = min<int>(32, (N + threadsPerBlock - 1) / threadsPerBlock);
 
@@ -112,8 +112,8 @@ int main() {
     b = (float*)malloc(N * sizeof(float));
 
     for (int i = 0; i < N; i++) {
-        a[i] = i * 0.1;
-        b[i] = i * 1.1;
+        a[i] = rand() * (4.0 / RAND_MAX) - 2.0;
+        b[i] = rand() * (4.0 / RAND_MAX) - 2.0;
     }
 
     if (dotproduct(&ans, a, b) == cudaSuccess) {

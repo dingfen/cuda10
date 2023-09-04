@@ -15,7 +15,6 @@ inline void gpuAssert(cudaError_t code, const char* file, int line) {
     }
 }
 
-cudaError_t addWithCuda(int *c, const int *a, const int *b, unsigned int size);
 
 __global__ void addKernel(int *c, const int *a, const int *b)
 {
@@ -36,29 +35,34 @@ int main()
         printf("Name: %s\n", prop.name);
         printf("Compute capability: %d.%d\n", prop.major, prop.minor);
         printf("Clock rate: %d\n", prop.clockRate);
-        printf("Device copy overlap:  ");
-        if (prop.deviceOverlap)
-            printf("Enabled.\n");
-        else
-            printf("Disabled.\n");
+        printf("Device async Engine Count: %d\n", prop.asyncEngineCount);
         printf("Kernel execution timeout:  ");
         if (prop.kernelExecTimeoutEnabled)
             printf("Enabled.\n");
         else
             printf("Disabled.\n");
-
+        printf("Device is ");
+        if (prop.integrated)
+            printf("integrated.\n");
+        else
+            printf("discreted.\n");
         printf("  --- Memory Information for device %d ---\n", i);
         printf("Total global mem: %lu\n", prop.totalGlobalMem);
         printf("Total constant mem: %lu\n", prop.totalConstMem);
         printf("Max mem pitch:  %ld\n", prop.memPitch);
+        printf("memory Clock Rate: %d\n", prop.memoryClockRate);
+        printf("memory Bus Width: %d\n", prop.memoryBusWidth);
         printf("Texture Alignment:  %ld\n", prop.textureAlignment);
 
         printf("  --- MP Information for device %d ---\n", i);
         printf("Multiprocessor count:  %d\n", prop.multiProcessorCount);
+        printf("concurrent execute kernels count: %d\n", prop.concurrentKernels);
         printf("Shared mem per mp:  %ld\n", prop.sharedMemPerBlock);
         printf("Registers per mp:  %ld\n", prop.sharedMemPerBlock);
         printf("Threads in wrap:  %d\n", prop.warpSize);
         printf("Max threads per block:  %d\n", prop.maxThreadsPerBlock);
+        printf("Max threads per MP: %d\n", prop.maxThreadsPerMultiProcessor);
+        printf("Max size of shared mem per MP: %lu\n", prop.sharedMemPerMultiprocessor);
         printf("Max threads dimensions:  (%d, %d, %d)\n", prop.maxThreadsDim[0], prop.maxThreadsDim[1], prop.maxThreadsDim[2]);
         printf("Max grid dimensions:  (%d, %d, %d)\n", prop.maxGridSize[0], prop.maxGridSize[1], prop.maxGridSize[2]);
     }
