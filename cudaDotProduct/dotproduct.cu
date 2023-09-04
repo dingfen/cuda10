@@ -60,6 +60,8 @@ extern "C" cudaError_t dotproduct(float* ans, float* a, float* b) {
     float* dev_c = NULL;
     float* c = NULL;
     float time;
+    float tmp = 0.;
+    float kahan = 0.;
     c = (float*)malloc(blocksPerGrid * sizeof(float));
 
     cudaEvent_t start, stop;
@@ -88,8 +90,12 @@ extern "C" cudaError_t dotproduct(float* ans, float* a, float* b) {
     GPUAssert(cudaEventSynchronize(stop));
     GPUAssert(cudaEventElapsedTime(&time, start, stop));
     // last reduction for cpu
+    // use kahan sum to reduce eff
     for (int i = 0; i < blocksPerGrid; i++) {
-        *ans += c[i];
+        float y = c[i] - kahan;
+        float t = *ans + y;
+        kahan = (t - *ans) - y;
+        *ans = t;
     }
 
     printf("GPU time: %8.4f\n", time);
@@ -110,7 +116,7 @@ int main() {
 
     a = (float*)malloc(N * sizeof(float));
     b = (float*)malloc(N * sizeof(float));
-
+    srand(time(0));
     for (int i = 0; i < N; i++) {
         a[i] = rand() * (4.0 / RAND_MAX) - 2.0;
         b[i] = rand() * (4.0 / RAND_MAX) - 2.0;
@@ -124,12 +130,20 @@ int main() {
     }
 
     float cpu_ans = 0.;
+    float y = 0.;
+    float kahan = 0.;
 
+    // use kahan sum to reduce eff
     for (int i = 0; i < N; i++) {
-        cpu_ans += a[i] * b[i];
+        float y = (a[i]*b[i]) - kahan;
+        float t = cpu_ans + y;
+        kahan = (t - cpu_ans) - y;
+        cpu_ans = t;
     }
+    // for (int i = 0; i < N; i++) {
+    //     cpu_ans += a[i] * b[i];
+    // }
     printf("CPU: %8.4f\n", cpu_ans);
-
 
     free(a);
     free(b);
