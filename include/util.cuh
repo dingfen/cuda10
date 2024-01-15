@@ -1,5 +1,6 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
+#include "cuda_profiler_api.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,19 +21,23 @@ inline void gpuAssert(cudaError_t code, const char *file, int line)
 
 
 template <int count, typename... TArgs>
-__host__ __device__ void perf_helper_func(const std::string& name, dim3 grid_size, dim3 blk_size, void(*kernel)(TArgs...), TArgs... args) {
+void perf_helper_func(const std::string& name, dim3 grid_size, dim3 blk_size, void(*kernel)(TArgs...), TArgs... args) {
     cudaEvent_t startEvent, stopEvent;
     float ms; // elapsed time in milliseconds
 
     GPUAssert(cudaEventCreate(&startEvent));
     GPUAssert(cudaEventCreate(&stopEvent));
+    cudaProfilerStart();
     GPUAssert(cudaEventRecord(startEvent, 0));
     for (int i = 0; i < count; i++) {
-        kernel<<<grid_size, blk_size>>>(args);
+        kernel<<<grid_size, blk_size>>>(args...);
         GPUAssert(cudaStreamSynchronize(0));
     }
     GPUAssert(cudaEventRecord(stopEvent, 0));
     GPUAssert(cudaEventSynchronize(stopEvent));
+    cudaProfilerStop();
     GPUAssert(cudaEventElapsedTime(&ms, startEvent, stopEvent));
-    printf("Time for executing %s %d times: %f (ms)\n", name, count, ms);
+    printf("Time for executing %s %d times: %f (ms)\n", name.c_str(), count, ms);
+    GPUAssert(cudaEventDestroy(startEvent));
+    GPUAssert(cudaEventDestroy(stopEvent));
 }
