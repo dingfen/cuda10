@@ -11,8 +11,11 @@ check_language(CUDA)
 
 set(CMAKE_CUDA_ARCHITECTURES 75)
 set(BIN_DIR ${PROJECT_SOURCE_DIR}/bin)
+set(SOURCE_DIR ${PROJECT_SOURCE_DIR}/src)
 
 # enable_language(CUDA)
+# 包含头文件util.cuh
+include_directories(${PROJECT_SOURCE_DIR}/include)
 
 message(STATUS "cuda version: " ${CUDA_VERSION_STRING})
 
@@ -20,9 +23,12 @@ message(STATUS "cuda version: " ${CUDA_VERSION_STRING})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${BIN_DIR})
 
 # 加入要输出的可执行文件
-add_executable(cuda_add cudaAdd/add.cu)
-add_executable(cuda_deviceprop cudaDeviceProp/deviceprop.cu)
-add_executable(cuda_dotproduct cudaDotProduct/dotproduct.cu)
-add_executable(cuda_pinmem cudaPinMem/pinmem.cu)
-add_executable(cuda_async cudaAsync/cudaasync.cu)
-add_executable(cuda_zerocopy cudaZeroCopy/zerocopy.cu)
+set(EXE_OBJ_LIST "cudaAdd;cudaDeviceProp;cudaDotProduct;cudaPinMem;\
+cudaAsync;cudaZeroCopy;elementwise")
+
+foreach(EXE_OBJ ${EXE_OBJ_LIST})
+    set(SRC_LIST)
+    aux_source_directory(${SOURCE_DIR}/${EXE_OBJ} SRC_LIST)
+    add_executable(${EXE_OBJ} ${SRC_LIST})
+    #target_link_libraries(${EXE_OBJ} ${CUDA_LIBRARIES})
+endforeach()
