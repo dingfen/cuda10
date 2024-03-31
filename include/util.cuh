@@ -1,6 +1,7 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include "cuda_profiler_api.h"
+#include <nvToolsExt.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,10 +28,12 @@ void perf_helper_func(const std::string& name, dim3 grid_size, dim3 blk_size, vo
   GPUAssert(cudaEventCreate(&stopEvent));
   cudaProfilerStart();
   GPUAssert(cudaEventRecord(startEvent, 0));
+  // nvtxRangePushA(name.c_str());
   for (int i = 0; i < count; i++) {
     kernel<<<grid_size, blk_size>>>(args...);
     GPUAssert(cudaStreamSynchronize(0));
   }
+  // nvtxRangePop();
   GPUAssert(cudaEventRecord(stopEvent, 0));
   GPUAssert(cudaEventSynchronize(stopEvent));
   cudaProfilerStop();
