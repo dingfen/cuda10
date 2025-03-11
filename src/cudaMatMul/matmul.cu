@@ -77,6 +77,46 @@ __global__ void matmul_outer_product_gpu(float* c, float* a, float* b, int m, in
     c[x * n + y] = v;
 }
 
+
+template<int BLOCK_SIZE>
+__global__ void matmul_outer_product_tile2d_gpu(float* c, float* a, float* b, int m, int n, int k) {
+    int tidy = threadIdx.y;
+    int tidx = threadIdx.x;
+    int thread_num_x = gridDim.x * blockDim.x;
+    int thread_num_y = gridDim.y * blockDim.y;
+    int x_grid_loop = (m + thread_num_x - 1) / thread_num_x;
+    int y_grid_loop = (n + thread_num_y - 1) / thread_num_y;
+    __shared__ float as[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ float bs[BLOCK_SIZE][BLOCK_SIZE];
+
+    int tilesx = (k + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    for(int mm = 0; mm < x_grid_loop; mm++) {
+        for (int nn = 0; nn < y_grid_loop; nn++) {
+            int y = nn * thread_num_y + blockIdx.y * blockDim.y + threadIdx.y;
+            int x = mm * thread_num_x + blockIdx.x * blockDim.x + threadIdx.x;
+            float v = 0.0f;
+            for(int i = 0; i < tilesx; i++) {
+                // load data from global memory to shared memory
+                as[tidx][tidy] = a[x * k + i * BLOCK_SIZE + tidy];
+                bs[tidx][tidy] = b[(i * BLOCK_SIZE + tidx) * n + y];
+
+                // sync to wait for all threads in one block to finish loading datas
+                __syncthreads();
+
+                // sub-matrix multiply
+                for(int l = 0; l < BLOCK_SIZE; l++) {
+                    v += as[tidx][l] * bs[l][tidy];
+                }
+
+                // sync to wait for all threads in one block to finish compute
+                __syncthreads();
+            }
+            // store results into global memory
+            c[x * n + y] = v;
+        }
+    }
+}
+
 __global__ void matmul_tile2d_gpu(float* c, float* a, float* b, int m, int n, int k) {
     int thread_num_x = gridDim.x * blockDim.x;
     int thread_num_y = gridDim.y * blockDim.y;
@@ -549,11 +589,87 @@ int test_matmul_tile2d_shared_gpu() {
     return err;
 }
 
+
+int test_matmul_outer_product_tile2d_gpu() {
+    int m = 128;
+    int n = 128;
+    int k = 128;
+
+    float* a = (float*)malloc(m * k * sizeof(float));
+    float* b = (float*)malloc(k * n * sizeof(float));
+    float* c = (float*)malloc(m * n * sizeof(float));
+    float* d_a, *d_b, *d_c;
+
+    // initialize a and b
+    for (int i = 0; i < m * k; i++) {
+        a[i] = rand() / (float)RAND_MAX;
+    }
+    for (int i = 0; i < k * n; i++) {
+        b[i] = rand() / (float)RAND_MAX;
+    }
+    // initialize c to zero
+    for (int i = 0; i < m * n; i++) {
+        c[i] = 0.0f;
+    }
+
+    // allocate memory on device
+    GPUAssert(cudaMalloc((void**)&d_a, m * k * sizeof(float)));
+    GPUAssert(cudaMalloc((void**)&d_b, k * n * sizeof(float)));
+    GPUAssert(cudaMalloc((void**)&d_c, m * n * sizeof(float)));
+
+    // copy data to device
+    GPUAssert(cudaMemcpy(d_a, a, m * k * sizeof(float), cudaMemcpyHostToDevice));
+    GPUAssert(cudaMemcpy(d_b, b, k * n * sizeof(float), cudaMemcpyHostToDevice));
+    GPUAssert(cudaMemcpy(d_c, c, m * n * sizeof(float), cudaMemcpyHostToDevice));
+
+    // launch kernel
+    const int loop_times = 10;
+    // int grid;
+    // GPUAssert(get_grid_size_by_array_size(m * n, block.x * block.y, &grid));
+    dim3 grid_size = dim3(4, 4, 1);
+    dim3 block(8, 8);
+    perf_helper_func<loop_times, float*, float*, float*, int, int, int>(
+                     "matmul_outer_product_tile2d_gpu", 
+                     grid_size, block,
+                     matmul_outer_product_tile2d_gpu<8>, d_c, d_a, d_b, m, n, k);
+
+    // copy result back to host
+    GPUAssert(cudaMemcpy(c, d_c, m * n * sizeof(float), cudaMemcpyDeviceToHost));
+
+    // check result
+    float* c_cpu = (float*)malloc(m * n * sizeof(float));
+    matmul_cpu(c_cpu, a, b, m, n, k);
+    int err = 0;
+    for (int i = 0; i < m * n; i++) {
+        if (fabs(c[i] - c_cpu[i]) > 1e-2) {
+            printf("error at %d: %f vs %f\n", i, c[i], c_cpu[i]);
+            err++;
+        }
+    }
+    if (err == 0) {
+        printf("test_matmul_outer_product_tile2d_gpu passed\n");
+    } else {
+        printf("test_matmul_outer_product_tile2d_gpu failed\n");
+    }
+
+    // free memory
+    free(a);
+    free(b);
+    free(c);
+    free(c_cpu);
+    GPUAssert(cudaFree(d_a));
+    GPUAssert(cudaFree(d_b));
+    GPUAssert(cudaFree(d_c));
+
+    return err;
+}
+
 int main() {
     test_matmul_naive_gpu();
     test_matmul_tile2d_gpu();
     test_matmul_inner_product_thd_div_gpu();
     test_matmul_outer_product_gpu();
     test_matmul_tile2d_shared_gpu();
+    test_matmul_outer_product_tile2d_gpu();
     return 0;
 }
